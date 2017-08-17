@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"os"
 
 	"github.com/gin-gonic/gin"
 )
@@ -51,6 +52,11 @@ func main() {
 	//get domain
 	router.GET("/:domain", getMXResults)
 
-	router.Run()
+	//PortToUse := ":" + os.Args[1]
+	err := os.Setenv("PORT", os.Args[1])
+	if err != nil {
+		panic(err)
+	}
+	router.Run(:9090)
 
 }
