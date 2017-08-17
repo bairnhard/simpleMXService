@@ -37,8 +37,6 @@ func getMXResults(domain *gin.Context) {
 
 	MXTemp := strmx(MXResult)
 
-	//fmt.Println(MXTemp)
-
 	//hier geben wir was zurück
 	domain.JSON(200, MXTemp)
 
@@ -48,7 +46,6 @@ func getMXResults(domain *gin.Context) {
 
 func main() {
 
-	//_______________________________________________________________________
 	router := gin.Default()
 
 	//get domain
