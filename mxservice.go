@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"net"
-	"os"
 
 	"github.com/gin-gonic/gin"
 )
@@ -26,6 +25,34 @@ func strmx(mxs []*net.MX) string {
 
 //------------------------------------------------------------------------------------------
 
+func getProvider(hostname *gin.Context) {
+
+	// Work in progress - currently just returns an IP Address
+
+	hoststr := hostname.Params.ByName("hostname")
+
+	// TXT Lookup
+	ipresult, err := net.LookupTXT(hoststr)
+	if err != nil {
+		hostname.JSON(404, "no such host")
+		//panic(err)
+	}
+
+	//IP V4 Lookup
+	ipv4, err := net.LookupIP(hoststr)
+	if err != nil {
+		hostname.JSON(404, "no such host")
+		//panic(err)
+	}
+
+	hostname.JSON(200, ipv4)
+
+	hostname.JSON(200, ipresult)
+
+}
+
+//------------------------------------------------------------------------------------------
+
 func getMXResults(domain *gin.Context) {
 
 	domainstr := domain.Params.ByName("domain")
@@ -38,7 +65,6 @@ func getMXResults(domain *gin.Context) {
 
 	MXTemp := strmx(MXResult)
 
-	//hier geben wir was zurück
 	domain.JSON(200, MXTemp)
 
 }
@@ -49,14 +75,13 @@ func main() {
 
 	router := gin.Default()
 
-	//get domain
-	router.GET("/:domain", getMXResults)
+	// Usage:
+	// http://localhost:8080/getDomain/google.com
+	// http://localhost:8080/getProvider/aspmx.l.google.com
 
-	//PortToUse := ":" + os.Args[1]
-	err := os.Setenv("PORT", os.Args[1])
-	if err != nil {
-		panic(err)
-	}
-	router.Run(:9090)
+	router.GET("/getDomain/:domain", getMXResults)
+	router.GET("/getProvider/:hostname", getProvider)
+
+	router.Run()
 
 }
