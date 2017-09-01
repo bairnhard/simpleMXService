@@ -10,22 +10,17 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-//------------------------------------------------------------------------------------------
-
 func strmx(mxs []*net.MX) string {
 	var buf bytes.Buffer
 	sep := ""
-	//fmt.Fprintf(&buf, "[")
 
 	for _, mx := range mxs {
 		fmt.Fprintf(&buf, "%s%s:%d", sep, mx.Host, mx.Pref)
 		sep = ";"
 	}
-	//fmt.Fprintf(&buf, "]")
+
 	return buf.String()
 }
-
-//------------------------------------------------------------------------------------------
 
 func getProvider(hostname *gin.Context) {
 
@@ -40,7 +35,7 @@ func getProvider(hostname *gin.Context) {
 		panic(err)
 	}
 
-	hostname.JSON(200, ipv4)
+	hostname.IndentedJSON(200, ipv4)
 
 }
 
@@ -56,9 +51,7 @@ func getMXResults(domain *gin.Context) {
 		panic(err)
 	}
 
-	MXTemp := strmx(MXResult)
-
-	domain.JSON(200, MXTemp)
+	domain.IndentedJSON(200, MXResult)
 
 }
 
@@ -87,34 +80,14 @@ func geoIP(hostname *gin.Context) { //GeoIP
 
 	url := fmt.Sprintf("http://freegeoip.net/JSON/%s", hoststr)
 
-	// Build the request
-	req, err := http.NewRequest("GET", url, nil)
+	resp, err := http.Get(url)
 	if err != nil {
 		panic(err)
 
 	}
 
-	// For control over HTTP client headers,
-	// redirect policy, and other settings,
-	// create a Client
-	// A Client is an HTTP client
-	client := &http.Client{}
-
-	// Send the request via a client
-	// Do sends an HTTP request and
-	// returns an HTTP response
-	resp, err := client.Do(req)
-	if err != nil {
-		panic(err)
-
-	}
-
-	// Callers should close resp.Body
-	// when done reading from it
-	// Defer the closing of the body
 	defer resp.Body.Close()
 
-	// Fill the record with the data from the JSON
 	var record GeoipResult
 
 	// Use json.Decode for reading streams of JSON data
@@ -122,7 +95,7 @@ func geoIP(hostname *gin.Context) { //GeoIP
 		panic(err)
 	}
 
-	hostname.JSON(200, record)
+	hostname.IndentedJSON(200, record)
 
 }
 
