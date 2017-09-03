@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	geoip2 "github.com/oschwald/geoip2-golang"
 )
 
 func strmx(mxs []*net.MX) string {
@@ -99,6 +100,31 @@ func geoIP(hostname *gin.Context) { //GeoIP
 
 }
 
+func getlocalIP(ip *gin.Context) { //GeoIP
+
+	ipg := ip.Params.ByName("ip")
+	ip2 := net.ParseIP(ipg)
+
+	//MaxMind GeoIP City Lite DB
+	// download from https://dev.maxmind.com/geoip/geoip2/geolite2/
+
+	db, err := geoip2.Open("GeoLite2-City.mmdb")
+	if err != nil {
+		//log.Fatal(err)
+		panic(err)
+	}
+
+	record, err := db.City(ip2)
+	if err != nil {
+		//log.Fatal(err)
+		panic(err)
+	}
+	defer db.Close()
+
+	ip.IndentedJSON(200, record.Country.Names["en"])
+
+}
+
 //------------------------------------------------------------------------------------------
 
 func main() {
@@ -109,10 +135,12 @@ func main() {
 	// http://localhost:8080/getDomain/google.com
 	// http://localhost:8080/getProvider/aspmx.l.google.com
 	// http://localhost:8080/getGeoIp/aspmx.l.google.com
+	// http://localhost:8080/getlocalIp/aspmx.l.google.com
 
 	router.GET("/getDomain/:domain", getMXResults)
 	router.GET("/getProvider/:hostname", getProvider)
 	router.GET("/getGeoIp/:hostname", geoIP)
+	router.GET("/getlocalIp/:ip", getlocalIP)
 
 	router.Run()
 
