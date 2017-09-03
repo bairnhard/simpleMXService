@@ -119,9 +119,10 @@ func getlocalIP(ip *gin.Context) { //GeoIP
 		//log.Fatal(err)
 		panic(err)
 	}
-	defer db.Close()
 
-	ip.IndentedJSON(200, record.Country.Names["en"])
+	ip.IndentedJSON(200, record)
+
+	defer db.Close()
 
 }
 
@@ -134,8 +135,14 @@ func main() {
 	// Usage:
 	// http://localhost:8080/getDomain/google.com
 	// http://localhost:8080/getProvider/aspmx.l.google.com
-	// http://localhost:8080/getGeoIp/aspmx.l.google.com
-	// http://localhost:8080/getlocalIp/aspmx.l.google.com
+	// http://localhost:8080/getGeoIp/aspmx.l.google.com    <- uses freegeoip.net - max 15k requsts per hour
+	// http://localhost:8080/getlocalIp/123.123.123.123 <- uses MaxMind GeoIP databases locally - need regular update at least daily
+
+	//TODO:
+	// Implement config file
+	// Implement logging
+	// Implement DB Updates
+	// Implement provider table lookup
 
 	router.GET("/getDomain/:domain", getMXResults)
 	router.GET("/getProvider/:hostname", getProvider)
