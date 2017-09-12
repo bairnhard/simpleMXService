@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	geoip2 "github.com/oschwald/geoip2-golang"
@@ -146,7 +147,7 @@ func getlocalIP(ip *gin.Context) { //GeoIP
 func downloadGeoDB(url string) string {
 	tokens := strings.Split(url, "/")
 	fileName := tokens[len(tokens)-1]
-	fmt.Println("Downloading", url, "to", fileName)
+	// fmt.Println("Downloading", url, "to", fileName)
 
 	// TODO: check file existence first with io.IsExist
 
@@ -172,13 +173,13 @@ func downloadGeoDB(url string) string {
 	}
 	defer response.Body.Close()
 
-	n, err := io.Copy(output, response.Body)
+	_, err = io.Copy(output, response.Body)
 	if err != nil {
 		log.Fatalln("Error while downloading", url, "-", err)
 		return "error"
 	}
 
-	log.Println(n, "bytes downloaded.")
+	//log.Println(n, "bytes downloaded.")
 
 	return fileName
 
@@ -218,22 +219,22 @@ func processFile(srcFile string) {
 
 		switch header.Typeflag {
 		case tar.TypeDir: // = directory
-			fmt.Println("Directory:", name)
+		//	fmt.Println("Directory:", name)
 		//	os.Mkdir(name, 0755)
 		case tar.TypeReg: // = regular file
 			tokens := strings.Split(name, "/")
 			fileName := tokens[len(tokens)-1]
-			fmt.Println("Regular file:", fileName)
+			//	fmt.Println("Regular file:", fileName)
 			data := make([]byte, header.Size)
 			_, err := tarReader.Read(data)
 			if err != nil {
-				panic("Error reading file!!! PANIC!!!!!!")
+				log.Fatalln("Error unpacking File: ", err)
 			}
 
 			ioutil.WriteFile(fileName, data, 0755)
 		default:
-			fmt.Printf("%s : %c %s %s\n",
-				"Yikes! Unable to figure out type",
+			log.Fatalln("%s : %c %s %s\n",
+				"Unable to figure out type",
 				header.Typeflag,
 				"in file",
 				name,
@@ -249,10 +250,10 @@ func md5verify(dbname string, md5name string) bool {
 		log.Fatalln("error reading hash file: ", err)
 	}
 
-	fmt.Println(hashvalue) // print the content as 'bytes'
+	// fmt.Println(hashvalue) // print the content as 'bytes'
 
 	hashstr := string(hashvalue) // convert content to a 'string'
-	fmt.Println(hashstr)
+	// fmt.Println(hashstr)
 
 	file, err := os.Open(dbname)
 
@@ -269,29 +270,47 @@ func md5verify(dbname string, md5name string) bool {
 		log.Fatalln("error generating MD5 Hash: ", err)
 	}
 
-	hr := hash.Sum(nil)
+	htest := fmt.Sprintf("%x", hash.Sum(nil))
 
-	n := -1
-	for i, b := range hr {
-		if b == 0 {
-			break
-		}
-		n = i
-	}
-	hresultstr := string(hr[:n+1])
-
-	fmt.Printf("%s MD5 checksum is %x \n", file.Name(), hash.Sum(nil))
-
-	fmt.Println("hresultstr: ", hresultstr)
-	fmt.Println("hashfile: ", hashstr)
-
-	if hresultstr == hashstr {
-		fmt.Println("Hashes match")
+	if htest == hashstr {
+		fmt.Println("Hashes match: ", htest)
 		return true
 	}
 	fmt.Println("Hash mismatch")
 	return false
 
+}
+
+func dbupd() {
+	timestamp := time.Now().Local()
+
+	dbName := downloadGeoDB("http://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz")
+	// fmt.Println("Initializing download: ", dbName)
+
+	// unpack downloaded file
+	processFile(dbName)
+
+	// fmt.Println("getting MD5 HASH...", dbName)
+	mdName := downloadGeoDB("http://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz.md5")
+
+	mdcheck := md5verify(dbName, mdName)
+	if mdcheck == false {
+		log.Fatalln("MD5 check failed - db file corrupted")
+		os.Exit(1)
+
+	}
+
+	str := "recieved db update at " + timestamp.String()
+	fmt.Println(str)
+
+}
+
+func dlinterval(n time.Duration) { //interval in Hours
+
+	for _ = range time.Tick(n * time.Hour) {
+
+		dbupd()
+	}
 }
 
 //------------------------------------------------------------------------------------------
@@ -308,21 +327,10 @@ func main() {
 
 	//TODO:
 	// Implement config file
-	// Implement logging
-	// Implement DB Updates
 	// Implement provider table lookup
 
-	fmt.Println("Initializing download...")
-	dbName := downloadGeoDB("http://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz")
-
-	// unpack downloaded file
-	fmt.Println("unpacking...", dbName)
-	processFile(dbName)
-
-	fmt.Println("getting MD5 HASH...", dbName)
-	mdName := downloadGeoDB("http://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz.md5")
-
-	md5verify(dbName, mdName)
+	dbupd()           // get new db at start and then
+	go dlinterval(12) // every half day
 
 	router.GET("/getDomain/:domain", getMXResults)
 	router.GET("/getProvider/:hostname", getProvider)
