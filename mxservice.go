@@ -142,37 +142,6 @@ func getlocalIP(ip *gin.Context) { //GeoIP
 	defer db.Close()
 
 }
-
-//------------------------------------------------------------------------------------------
-
-func main() {
-
-	router := gin.Default()
-
-	// Usage:
-	// http://localhost:8080/getDomain/google.com
-	// http://localhost:8080/getProvider/aspmx.l.google.com
-	// http://localhost:8080/getGeoIp/aspmx.l.google.com    <- uses freegeoip.net - max 15k requsts per hour
-	// http://localhost:8080/getlocalIp/123.123.123.123 <- uses MaxMind GeoIP databases locally - need regular update at least daily
-
-	//TODO:
-	// Implement config file
-	// Implement logging
-	// Implement DB Updates
-	// Implement provider table lookup
-
-	fmt.Println("Initializing download...")
-	downloadGeoDB("http://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz")
-
-	router.GET("/getDomain/:domain", getMXResults)
-	router.GET("/getProvider/:hostname", getProvider)
-	router.GET("/getGeoIp/:hostname", geoIP)
-	router.GET("/getlocalIp/:ip", getlocalIP)
-
-	router.Run()
-
-}
-
 func downloadGeoDB(url string) {
 	tokens := strings.Split(url, "/")
 	fileName := tokens[len(tokens)-1]
@@ -248,8 +217,8 @@ func processFile(srcFile string) {
 		name := header.Name
 
 		switch header.Typeflag {
-		// case tar.TypeDir: // = directory
-		//	fmt.Println("Directory:", name)
+		case tar.TypeDir: // = directory
+			fmt.Println("Directory:", name)
 		//	os.Mkdir(name, 0755)
 		case tar.TypeReg: // = regular file
 			tokens := strings.Split(name, "/")
@@ -271,4 +240,34 @@ func processFile(srcFile string) {
 			)
 		}
 	}
+}
+
+//------------------------------------------------------------------------------------------
+
+func main() {
+
+	router := gin.Default()
+
+	// Usage:
+	// http://localhost:8080/getDomain/google.com
+	// http://localhost:8080/getProvider/aspmx.l.google.com
+	// http://localhost:8080/getGeoIp/aspmx.l.google.com    <- uses freegeoip.net - max 15k requsts per hour
+	// http://localhost:8080/getlocalIp/123.123.123.123 <- uses MaxMind GeoIP databases locally - need regular update at least daily
+
+	//TODO:
+	// Implement config file
+	// Implement logging
+	// Implement DB Updates
+	// Implement provider table lookup
+
+	fmt.Println("Initializing download...")
+	downloadGeoDB("http://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz")
+
+	router.GET("/getDomain/:domain", getMXResults)
+	router.GET("/getProvider/:hostname", getProvider)
+	router.GET("/getGeoIp/:hostname", geoIP)
+	router.GET("/getlocalIp/:ip", getlocalIP)
+
+	router.Run()
+
 }
