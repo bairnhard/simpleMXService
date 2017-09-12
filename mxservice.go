@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"crypto/md5"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -142,7 +143,7 @@ func getlocalIP(ip *gin.Context) { //GeoIP
 	defer db.Close()
 
 }
-func downloadGeoDB(url string) {
+func downloadGeoDB(url string) string {
 	tokens := strings.Split(url, "/")
 	fileName := tokens[len(tokens)-1]
 	fmt.Println("Downloading", url, "to", fileName)
@@ -159,7 +160,7 @@ func downloadGeoDB(url string) {
 	if err != nil {
 		log.Fatal("Error while creating", fileName, "-", err)
 		//fmt.Println("Error while creating", fileName, "-", err)
-		return
+		return "error"
 	}
 	defer output.Close()
 
@@ -167,20 +168,19 @@ func downloadGeoDB(url string) {
 	if err != nil {
 		//fmt.Println("Error while downloading", url, "-", err)
 		log.Fatalln("Error while downloading", url, "-", err)
-		return
+		return "error"
 	}
 	defer response.Body.Close()
 
 	n, err := io.Copy(output, response.Body)
 	if err != nil {
 		log.Fatalln("Error while downloading", url, "-", err)
-		return
+		return "error"
 	}
 
 	log.Println(n, "bytes downloaded.")
 
-	// unpack downloaded file
-	processFile(fileName)
+	return fileName
 
 }
 
@@ -242,6 +242,58 @@ func processFile(srcFile string) {
 	}
 }
 
+func md5verify(dbname string, md5name string) bool {
+
+	hashvalue, err := ioutil.ReadFile(md5name) // md5 hash
+	if err != nil {
+		log.Fatalln("error reading hash file: ", err)
+	}
+
+	fmt.Println(hashvalue) // print the content as 'bytes'
+
+	hashstr := string(hashvalue) // convert content to a 'string'
+	fmt.Println(hashstr)
+
+	file, err := os.Open(dbname)
+
+	if err != nil {
+		log.Fatalln("error reading db file: ", err)
+	}
+
+	defer file.Close()
+
+	hash := md5.New()
+	_, err = io.Copy(hash, file)
+
+	if err != nil {
+		log.Fatalln("error generating MD5 Hash: ", err)
+	}
+
+	hr := hash.Sum(nil)
+
+	n := -1
+	for i, b := range hr {
+		if b == 0 {
+			break
+		}
+		n = i
+	}
+	hresultstr := string(hr[:n+1])
+
+	fmt.Printf("%s MD5 checksum is %x \n", file.Name(), hash.Sum(nil))
+
+	fmt.Println("hresultstr: ", hresultstr)
+	fmt.Println("hashfile: ", hashstr)
+
+	if hresultstr == hashstr {
+		fmt.Println("Hashes match")
+		return true
+	}
+	fmt.Println("Hash mismatch")
+	return false
+
+}
+
 //------------------------------------------------------------------------------------------
 
 func main() {
@@ -261,7 +313,16 @@ func main() {
 	// Implement provider table lookup
 
 	fmt.Println("Initializing download...")
-	downloadGeoDB("http://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz")
+	dbName := downloadGeoDB("http://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz")
+
+	// unpack downloaded file
+	fmt.Println("unpacking...", dbName)
+	processFile(dbName)
+
+	fmt.Println("getting MD5 HASH...", dbName)
+	mdName := downloadGeoDB("http://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz.md5")
+
+	md5verify(dbName, mdName)
 
 	router.GET("/getDomain/:domain", getMXResults)
 	router.GET("/getProvider/:hostname", getProvider)
