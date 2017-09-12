@@ -1,11 +1,18 @@
 package main
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"log"
 	"net"
 	"net/http"
+	"os"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	geoip2 "github.com/oschwald/geoip2-golang"
@@ -33,7 +40,8 @@ func getProvider(hostname *gin.Context) {
 	ipv4, err := net.LookupIP(hoststr)
 	if err != nil {
 		hostname.JSON(404, "no such host")
-		panic(err)
+		//panic(err)
+		log.Fatal(err)
 	}
 
 	hostname.IndentedJSON(200, ipv4)
@@ -49,7 +57,8 @@ func getMXResults(domain *gin.Context) {
 	//get the MX records
 	MXResult, err := net.LookupMX(domainstr)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
+		//panic(err)
 	}
 
 	domain.IndentedJSON(200, MXResult)
@@ -79,21 +88,30 @@ func geoIP(hostname *gin.Context) { //GeoIP
 		MetroCode   int     `json:"metro_code"`
 	}
 
+	type GeoipShort struct {
+		CountryCode string  `json:"country_code"`
+		Latitude    float64 `json:"latitude"`
+		Longitude   float64 `json:"longitude"`
+	}
+
 	url := fmt.Sprintf("http://freegeoip.net/JSON/%s", hoststr)
 
 	resp, err := http.Get(url)
 	if err != nil {
-		panic(err)
+		// panic(err)
+		log.Fatal(err)
 
 	}
 
 	defer resp.Body.Close()
 
-	var record GeoipResult
+	// var record GeoipResult
+	var record GeoipShort
 
 	// Use json.Decode for reading streams of JSON data
 	if err := json.NewDecoder(resp.Body).Decode(&record); err != nil {
-		panic(err)
+		//panic(err)
+		log.Fatal(err)
 	}
 
 	hostname.IndentedJSON(200, record)
@@ -110,14 +128,13 @@ func getlocalIP(ip *gin.Context) { //GeoIP
 
 	db, err := geoip2.Open("GeoLite2-City.mmdb")
 	if err != nil {
-		//log.Fatal(err)
-		panic(err)
+		log.Fatalln(" Database error: ", err)
+		//panic(err)
 	}
 
 	record, err := db.City(ip2)
 	if err != nil {
-		//log.Fatal(err)
-		panic(err)
+		log.Fatal(err)
 	}
 
 	ip.IndentedJSON(200, record)
@@ -144,6 +161,9 @@ func main() {
 	// Implement DB Updates
 	// Implement provider table lookup
 
+	fmt.Println("Initializing download...")
+	downloadGeoDB("http://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz")
+
 	router.GET("/getDomain/:domain", getMXResults)
 	router.GET("/getProvider/:hostname", getProvider)
 	router.GET("/getGeoIp/:hostname", geoIP)
@@ -151,4 +171,104 @@ func main() {
 
 	router.Run()
 
+}
+
+func downloadGeoDB(url string) {
+	tokens := strings.Split(url, "/")
+	fileName := tokens[len(tokens)-1]
+	fmt.Println("Downloading", url, "to", fileName)
+
+	// TODO: check file existence first with io.IsExist
+
+	if _, err := os.Stat(fileName); !os.IsNotExist(err) {
+		// path/to/whatever exists
+		os.Remove(fileName)
+	}
+
+	output, err := os.Create(fileName)
+
+	if err != nil {
+		log.Fatal("Error while creating", fileName, "-", err)
+		//fmt.Println("Error while creating", fileName, "-", err)
+		return
+	}
+	defer output.Close()
+
+	response, err := http.Get(url)
+	if err != nil {
+		//fmt.Println("Error while downloading", url, "-", err)
+		log.Fatalln("Error while downloading", url, "-", err)
+		return
+	}
+	defer response.Body.Close()
+
+	n, err := io.Copy(output, response.Body)
+	if err != nil {
+		log.Fatalln("Error while downloading", url, "-", err)
+		return
+	}
+
+	log.Println(n, "bytes downloaded.")
+
+	// unpack downloaded file
+	processFile(fileName)
+
+}
+
+func processFile(srcFile string) {
+
+	f, err := os.Open(srcFile)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	defer f.Close()
+
+	gzf, err := gzip.NewReader(f)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	tarReader := tar.NewReader(gzf)
+	// defer io.Copy(os.Stdout, tarReader)
+
+	for true {
+		header, err := tarReader.Next()
+
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+
+		name := header.Name
+
+		switch header.Typeflag {
+		// case tar.TypeDir: // = directory
+		//	fmt.Println("Directory:", name)
+		//	os.Mkdir(name, 0755)
+		case tar.TypeReg: // = regular file
+			tokens := strings.Split(name, "/")
+			fileName := tokens[len(tokens)-1]
+			fmt.Println("Regular file:", fileName)
+			data := make([]byte, header.Size)
+			_, err := tarReader.Read(data)
+			if err != nil {
+				panic("Error reading file!!! PANIC!!!!!!")
+			}
+
+			ioutil.WriteFile(fileName, data, 0755)
+		default:
+			fmt.Printf("%s : %c %s %s\n",
+				"Yikes! Unable to figure out type",
+				header.Typeflag,
+				"in file",
+				name,
+			)
+		}
+	}
 }
