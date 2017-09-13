@@ -70,7 +70,6 @@ func getMXResults(domain *gin.Context) {
 //------------------------------------------------------------------------------------------
 
 //GeoIP - here we will get the country of origin...
-// using JSON to GO to convert json to go type struct...
 
 func geoIP(hostname *gin.Context) { //GeoIP
 
@@ -131,7 +130,7 @@ func getlocalIP(ip *gin.Context) { //GeoIP
 	db, err := geoip2.Open("GeoLite2-City.mmdb")
 	if err != nil {
 		log.Fatalln(" Database error: ", err)
-		//panic(err)
+
 	}
 
 	record, err := db.City(ip2)
@@ -148,8 +147,6 @@ func downloadGeoDB(url string) string {
 	tokens := strings.Split(url, "/")
 	fileName := tokens[len(tokens)-1]
 	// fmt.Println("Downloading", url, "to", fileName)
-
-	// TODO: check file existence first with io.IsExist
 
 	if _, err := os.Stat(fileName); !os.IsNotExist(err) {
 		// path/to/whatever exists
@@ -250,10 +247,7 @@ func md5verify(dbname string, md5name string) bool {
 		log.Fatalln("error reading hash file: ", err)
 	}
 
-	// fmt.Println(hashvalue) // print the content as 'bytes'
-
 	hashstr := string(hashvalue) // convert content to a 'string'
-	// fmt.Println(hashstr)
 
 	file, err := os.Open(dbname)
 
@@ -284,14 +278,14 @@ func md5verify(dbname string, md5name string) bool {
 func dbupd() {
 	timestamp := time.Now().Local()
 
-	dbName := downloadGeoDB("http://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz")
+	dbName := downloadGeoDB("http://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz") //this gets the database and returns the local file name
 	// fmt.Println("Initializing download: ", dbName)
 
 	// unpack downloaded file
 	processFile(dbName)
 
 	// fmt.Println("getting MD5 HASH...", dbName)
-	mdName := downloadGeoDB("http://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz.md5")
+	mdName := downloadGeoDB("http://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz.md5") //this gets the md5 text file for the database and returns the local file name
 
 	mdcheck := md5verify(dbName, mdName)
 	if mdcheck == false {
